@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: userId (UID)
+    // Fields: uid, displayName, email, photoURL, bio, balance, role, createdAt
+    //
+    // Collection: services
+    // Document ID: serviceId
+    // Fields: id, title, description, price, category, imageUrl, ownerUid, ownerName, createdAt
+    //
+    // Collection: posts
+    // Document ID: postId
+    // Fields: id, content, imageUrl, ownerUid, ownerName, ownerPhoto, likes, createdAt
+    //
+    // Collection: chats/{chatId}/messages
+    // Document ID: messageId
+    // Fields: id, senderUid, receiverUid, text, createdAt
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "bdf.josie@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'email']) &&
+             data.uid is string && data.displayName is string && data.email is string &&
+             data.displayName.size() < 100 && data.email.size() < 100;
+    }
+
+    function isValidService(data) {
+      return data.keys().hasAll(['title', 'description', 'price', 'ownerUid']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.description is string && data.description.size() < 2000 &&
+             data.price is number && data.price >= 0 &&
+             data.ownerUid == request.auth.uid;
+    }
+
+    function isValidPost(data) {
+      return data.keys().hasAll(['content', 'ownerUid']) &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 1000 &&
+             data.ownerUid == request.auth.uid;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['senderUid', 'receiverUid', 'text']) &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.senderUid == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == 'user';
+      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
+    }
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidService(request.resource.data);
+      allow update: if isAuthenticated() && (resource.data.ownerUid == request.auth.uid || isAdmin()) && isValidService(request.resource.data);
+      allow delete: if isAuthenticated() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidPost(request.resource.data);
+      allow update: if isAuthenticated() && (resource.data.ownerUid == request.auth.uid || isAdmin()) && isValidPost(request.resource.data);
+      allow delete: if isAuthenticated() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    match /chats/{chatId}/messages/{messageId} {
+      allow read: if isAuthenticated() && (chatId.matches(".*" + request.auth.uid + ".*"));
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data);
+    }
+  }
+}
