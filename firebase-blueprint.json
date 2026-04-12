@@ -1,84 +1,214 @@
 {
   "entities": {
     "User": {
-      "title": "User Profile",
-      "description": "User profile information and balance",
+      "title": "User",
+      "description": "User profile for sellers and buyers",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
         "displayName": { "type": "string" },
+        "username": { "type": "string" },
         "email": { "type": "string" },
         "photoURL": { "type": "string" },
         "bio": { "type": "string" },
-        "balance": { "type": "number" },
-        "role": { "type": "string", "enum": ["user", "admin"] },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "coverURL": { "type": "string" },
+        "isSeller": { "type": "boolean" },
+        "stripeAccountId": { "type": "string" },
+        "mercadoPagoId": { "type": "string" },
+        "mercadoPagoAccessToken": { "type": "string" },
+        "mercadoPagoPublicKey": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "followersCount": { "type": "number" },
+        "followingCount": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "balance": { "type": "number" }
       },
-      "required": ["uid", "displayName", "email"]
+      "required": ["uid", "displayName", "username", "createdAt"]
     },
     "Service": {
-      "title": "Marketplace Service",
-      "description": "A service offered by a user for sale",
+      "title": "Service",
+      "description": "A service offered by a seller",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "sellerName": { "type": "string" },
+        "sellerPhoto": { "type": "string" },
         "title": { "type": "string" },
         "description": { "type": "string" },
         "price": { "type": "number" },
-        "category": { "type": "string" },
         "imageUrl": { "type": "string" },
-        "ownerUid": { "type": "string" },
-        "ownerName": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" }
       },
-      "required": ["title", "description", "price", "ownerUid"]
+      "required": ["sellerId", "title", "price", "createdAt"]
     },
     "Post": {
-      "title": "Feed Post",
-      "description": "A post in the social feed",
+      "title": "Post",
+      "description": "A post in the global feed",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorPhoto": { "type": "string" },
         "content": { "type": "string" },
-        "imageUrl": { "type": "string" },
-        "ownerUid": { "type": "string" },
-        "ownerName": { "type": "string" },
-        "ownerPhoto": { "type": "string" },
-        "likes": { "type": "number" },
+        "mediaUrl": { "type": "string" },
+        "mediaType": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "likesCount": { "type": "number" }
+      },
+      "required": ["authorId", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A transaction/order for a service",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "payment_id" },
+        "product_id": { "type": "string" },
+        "buyer_email": { "type": "string" },
+        "seller_id": { "type": "string" },
+        "price": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "paid", "accepted", "delivered", "refused", "cancelled"] },
+        "seller_amount": { "type": "number" },
+        "platform_fee": { "type": "number" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "mpPaymentId": { "type": "string" }
+      },
+      "required": ["product_id", "buyer_email", "seller_id", "price", "status", "created_at"]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "A purchase record for a user",
+      "type": "object",
+      "properties": {
+        "user_email": { "type": "string" },
+        "order_id": { "type": "string" },
+        "product_id": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["content", "ownerUid"]
+      "required": ["user_email", "order_id", "product_id"]
     },
-    "Message": {
-      "title": "Chat Message",
-      "description": "A message sent between users",
+    "Follow": {
+      "title": "Follow",
+      "description": "Follow relationship",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "senderUid": { "type": "string" },
-        "receiverUid": { "type": "string" },
+        "followerId": { "type": "string" },
+        "followingId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["followerId", "followingId", "createdAt"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Chat conversation between two users",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "lastMessage": { "type": "string" }
+      },
+      "required": ["participants", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A message in a chat",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
         "text": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["senderUid", "receiverUid", "text"]
+      "required": ["chatId", "senderId", "text", "createdAt"]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "Like on a post",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "userId", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Comment on a post",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorPhoto": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "authorId", "text", "createdAt"]
+    },
+    "WithdrawalRequest": {
+      "title": "WithdrawalRequest",
+      "description": "A request to withdraw funds from balance",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "completed", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "status", "createdAt"]
     }
   },
   "firestore": {
     "/users/{userId}": {
-      "schema": "User",
+      "schema": { "$ref": "#/entities/User" },
       "description": "User profiles"
     },
     "/services/{serviceId}": {
-      "schema": "Service",
-      "description": "Marketplace services"
+      "schema": { "$ref": "#/entities/Service" },
+      "description": "Services offered by sellers"
     },
     "/posts/{postId}": {
-      "schema": "Post",
-      "description": "Social feed posts"
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Global feed posts"
     },
-    "/chats/{chatId}/messages/{messageId}": {
-      "schema": "Message",
-      "description": "Messages in a specific chat"
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Orders and transactions"
+    },
+    "/purchases/{purchaseId}": {
+      "schema": { "$ref": "#/entities/Purchase" },
+      "description": "User purchase records"
+    },
+    "/follows/{followId}": {
+      "schema": { "$ref": "#/entities/Follow" },
+      "description": "Follow relationships"
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/Chat" },
+      "description": "Chat conversations"
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Chat messages"
+    },
+    "/likes/{likeId}": {
+      "schema": { "$ref": "#/entities/Like" },
+      "description": "Post likes"
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Post comments"
+    },
+    "/withdrawal_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/WithdrawalRequest" },
+      "description": "User withdrawal requests"
     }
   }
 }

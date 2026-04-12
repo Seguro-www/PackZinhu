@@ -1,67 +1,366 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
     // ===============================================================
     // Assumed Data Model
     // ===============================================================
+    //
     // Collection: users
-    // Document ID: userId (UID)
-    // Fields: uid, displayName, email, photoURL, bio, balance, role, createdAt
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (required)
+    //   - username: string (required)
+    //   - photoURL: string (optional)
+    //   - bio: string (optional)
+    //   - coverURL: string (optional)
+    //   - website: string (optional)
+    //   - location: string (optional)
+    //   - isSeller: boolean (optional)
+    //   - stripeAccountId: string (optional)
+    //   - createdAt: string (required)
+    //   - followersCount: number (optional)
+    //   - followingCount: number (optional)
+    //   - rating: number (optional)
+    //   - reviewCount: number (optional)
+    //   - balance: number (optional)
     //
     // Collection: services
-    // Document ID: serviceId
-    // Fields: id, title, description, price, category, imageUrl, ownerUid, ownerName, createdAt
+    // Document ID: {serviceId}
+    // Fields:
+    //   - sellerId: string (required)
+    //   - sellerName: string (optional)
+    //   - sellerPhoto: string (optional)
+    //   - title: string (required)
+    //   - description: string (optional)
+    //   - price: number (required)
+    //   - imageUrl: string (optional)
+    //   - coverUrl: string (optional)
+    //   - coverType: string (optional)
+    //   - category: string (optional)
+    //   - createdAt: string (required)
+    //   - updatedAt: string (optional)
+    //   - rating: number (optional)
+    //   - reviewCount: number (optional)
+    //   - salesCount: number (optional)
     //
     // Collection: posts
-    // Document ID: postId
-    // Fields: id, content, imageUrl, ownerUid, ownerName, ownerPhoto, likes, createdAt
+    // Document ID: {postId}
+    // Fields:
+    //   - authorId: string (required)
+    //   - authorName: string (optional)
+    //   - authorPhoto: string (optional)
+    //   - content: string (optional)
+    //   - mediaUrl: string (optional)
+    //   - mediaType: string (optional)
+    //   - createdAt: string (required)
+    //   - likesCount: number (optional)
+    //   - commentsCount: number (optional)
     //
-    // Collection: chats/{chatId}/messages
-    // Document ID: messageId
-    // Fields: id, senderUid, receiverUid, text, createdAt
+    // Collection: orders
+    // Document ID: {orderId}
+    // Fields:
+    //   - product_id: string (required)
+    //   - buyer_email: string (required)
+    //   - seller_id: string (required)
+    //   - price: number (required)
+    //   - status: string (required)
+    //   - seller_amount: number (optional)
+    //   - platform_fee: number (optional)
+    //   - created_at: string (required)
+    //   - mpPaymentId: string (optional)
+    //
+    // Collection: purchases
+    // Document ID: {purchaseId}
+    // Fields:
+    //   - user_email: string (required)
+    //   - order_id: string (required)
+    //   - product_id: string (required)
+    //   - createdAt: string (required)
+    //
+    // Collection: follows
+    // Document ID: {followId}
+    // Fields:
+    //   - followerId: string (required)
+    //   - followingId: string (required)
+    //   - createdAt: string (required)
+    //
+    // Collection: chats
+    // Document ID: {chatId}
+    // Fields:
+    //   - participants: array (required)
+    //   - updatedAt: string (required)
+    //   - lastMessage: string (optional)
+    //
+    // Collection: messages
+    // Document ID: {messageId}
+    // Fields:
+    //   - chatId: string (required)
+    //   - senderId: string (required)
+    //   - text: string (optional)
+    //   - content: string (optional)
+    //   - createdAt: string (required)
+    //
+    // Collection: likes
+    // Document ID: {likeId}
+    // Fields:
+    //   - postId: string (required)
+    //   - userId: string (required)
+    //   - createdAt: string (required)
+    //
+    // Collection: comments
+    // Document ID: {commentId}
+    // Fields:
+    //   - postId: string (required)
+    //   - authorId: string (required)
+    //   - authorName: string (optional)
+    //   - authorPhoto: string (optional)
+    //   - text: string (required)
+    //   - createdAt: string (required)
+    //
+    // Collection: bookmarks
+    // Document ID: {bookmarkId}
+    // Fields:
+    //   - postId: string (required)
+    //   - userId: string (required)
+    //   - createdAt: string (required)
+    //
+    // Collection: notifications
+    // Document ID: {notificationId}
+    // Fields:
+    //   - recipient_id: string (required)
+    //   - sender_id: string (required)
+    //   - type: string (required)
+    //   - message: string (required)
+    //   - read: boolean (required)
+    //   - created_at: string (required)
+    //
+    // Collection: bank_accounts
+    // Document ID: {userId}
+    // Fields:
+    //   - pixKey: string (optional)
+    //   - bankName: string (optional)
+    //   - agencyAccount: string (optional)
+    //   - accountName: string (required)
+    //   - cpf: string (required)
+    //   - updatedAt: string (required)
+    //
+    // Collection: user_settings
+    // Document ID: {userId}
+    // Fields:
+    //   - soundEnabled: boolean (optional)
+    //   - browserNotificationsEnabled: boolean (optional)
+    //
     // ===============================================================
 
     // ===============================================================
     // Helper Functions
     // ===============================================================
+    
     function isAuthenticated() {
       return request.auth != null;
     }
-
+    
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         (request.auth.token.email == "bdf.josie@gmail.com" && request.auth.token.email_verified == true));
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
     }
 
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidString(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidNumber(field) {
+      return request.resource.data[field] is number;
+    }
+
+    function isValidOptionalNumber(field) {
+      return !(field in request.resource.data) || request.resource.data[field] is number;
+    }
+
+    function isValidBoolean(field) {
+      return request.resource.data[field] is bool;
+    }
+
+    function isValidOptionalBoolean(field) {
+      return !(field in request.resource.data) || request.resource.data[field] is bool;
+    }
+
+    function isValidDate(field) {
+      return request.resource.data[field] is string || request.resource.data[field] is timestamp;
+    }
+
+    function isValidOptionalDate(field) {
+      return !(field in request.resource.data) || isValidDate(field);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
     function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'displayName', 'email']) &&
-             data.uid is string && data.displayName is string && data.email is string &&
-             data.displayName.size() < 100 && data.email.size() < 100;
+      return data.uid == request.auth.uid &&
+             isValidOptionalString('displayName', 1, 100) &&
+             isValidOptionalString('username', 1, 50) &&
+             isValidOptionalString('email', 0, 200) &&
+             isValidOptionalString('photoURL', 0, 1000) &&
+             isValidOptionalString('bio', 0, 5000) &&
+             isValidOptionalString('coverURL', 0, 1000) &&
+             isValidOptionalString('website', 0, 200) &&
+             isValidOptionalString('location', 0, 200) &&
+             isValidOptionalBoolean('isSeller') &&
+             isValidOptionalString('stripeAccountId', 0, 100) &&
+             isValidOptionalString('mercadoPagoId', 0, 100) &&
+             isValidOptionalString('mercadoPagoAccessToken', 0, 200) &&
+             isValidOptionalString('mercadoPagoPublicKey', 0, 200) &&
+             isValidOptionalDate('createdAt') &&
+             isValidOptionalNumber('followersCount') &&
+             isValidOptionalNumber('followingCount') &&
+             isValidOptionalNumber('rating') &&
+             isValidOptionalNumber('reviewCount') &&
+             isValidOptionalNumber('balance') &&
+             isValidOptionalDate('lastSeen');
     }
 
     function isValidService(data) {
-      return data.keys().hasAll(['title', 'description', 'price', 'ownerUid']) &&
-             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
-             data.description is string && data.description.size() < 2000 &&
-             data.price is number && data.price >= 0 &&
-             data.ownerUid == request.auth.uid;
+      return data.sellerId == request.auth.uid &&
+             isValidOptionalString('title', 1, 200) &&
+             isValidOptionalString('description', 0, 5000) &&
+             isValidOptionalNumber('price') && 
+             isValidOptionalString('imageUrl', 0, 1000) &&
+             isValidOptionalString('coverUrl', 0, 1000) &&
+             isValidOptionalString('coverType', 0, 50) &&
+             isValidOptionalString('category', 0, 100) &&
+             isValidOptionalDate('createdAt') &&
+             isValidOptionalString('updatedAt', 0, 100) &&
+             isValidOptionalNumber('rating') &&
+             isValidOptionalNumber('reviewCount') &&
+             isValidOptionalNumber('salesCount') &&
+             isValidOptionalString('sellerName', 0, 100) &&
+             isValidOptionalString('sellerPhoto', 0, 1000);
     }
 
     function isValidPost(data) {
-      return data.keys().hasAll(['content', 'ownerUid']) &&
-             data.content is string && data.content.size() > 0 && data.content.size() < 1000 &&
-             data.ownerUid == request.auth.uid;
+      return data.authorId == request.auth.uid &&
+             isValidOptionalString('authorName', 0, 100) &&
+             isValidOptionalString('authorPhoto', 0, 1000) &&
+             isValidOptionalString('content', 0, 5000) &&
+             isValidOptionalString('mediaUrl', 0, 1000) &&
+             isValidOptionalString('mediaType', 0, 50) &&
+             isValidOptionalDate('createdAt') &&
+             isValidOptionalNumber('likesCount') &&
+             isValidOptionalNumber('commentsCount');
+    }
+
+    function isValidOrder(data) {
+      return hasRequiredFields(['product_id', 'buyer_email', 'seller_id', 'price', 'status', 'created_at']) &&
+             isValidString('product_id', 1, 100) &&
+             isValidString('buyer_email', 1, 200) &&
+             isValidString('seller_id', 1, 100) &&
+             isValidNumber('price') && data.price >= 0 &&
+             isValidOptionalNumber('seller_amount') &&
+             isValidOptionalNumber('platform_fee') &&
+             data.status in ['pending', 'paid', 'accepted', 'delivered', 'refused', 'cancelled'] &&
+             isValidDate('created_at') &&
+             isValidOptionalString('mpPaymentId', 0, 200);
+    }
+
+    function isValidPurchase(data) {
+      return hasRequiredFields(['user_email', 'order_id', 'product_id', 'createdAt']) &&
+             isValidString('user_email', 1, 200) &&
+             isValidString('order_id', 1, 100) &&
+             isValidString('product_id', 1, 100) &&
+             isValidDate('createdAt');
+    }
+
+    function isValidFollow(data) {
+      return hasRequiredFields(['followerId', 'followingId', 'createdAt']) &&
+             data.followerId == request.auth.uid &&
+             isValidDate('createdAt');
+    }
+
+    function isValidChat(data) {
+      return hasRequiredFields(['participants', 'updatedAt']) &&
+             data.participants is list &&
+             data.participants.size() == 2 &&
+             request.auth.uid in data.participants &&
+             isValidDate('updatedAt') &&
+             isValidOptionalString('lastMessage', 0, 1000);
     }
 
     function isValidMessage(data) {
-      return data.keys().hasAll(['senderUid', 'receiverUid', 'text']) &&
-             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
-             data.senderUid == request.auth.uid;
+      return hasRequiredFields(['chatId', 'senderId', 'createdAt']) &&
+             data.senderId == request.auth.uid &&
+             (isValidOptionalString('text', 0, 5000) || isValidOptionalString('content', 0, 5000)) &&
+             isValidDate('createdAt');
+    }
+
+    function isValidLike(data) {
+      return hasRequiredFields(['postId', 'userId', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             isValidDate('createdAt');
+    }
+
+    function isValidComment(data) {
+      return hasRequiredFields(['postId', 'authorId', 'text', 'createdAt']) &&
+             data.authorId == request.auth.uid &&
+             isValidOptionalString('authorName', 0, 100) &&
+             isValidOptionalString('authorPhoto', 0, 1000) &&
+             isValidString('text', 1, 2000) &&
+             isValidDate('createdAt');
+    }
+
+    function isValidBookmark(data) {
+      return hasRequiredFields(['postId', 'userId', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             isValidDate('createdAt') &&
+             isValidOptionalString('content', 0, 5000) &&
+             isValidOptionalString('mediaUrl', 0, 1000) &&
+             isValidOptionalString('mediaType', 0, 50) &&
+             isValidOptionalString('authorName', 0, 100);
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(['recipient_id', 'sender_id', 'type', 'message', 'read', 'created_at']) &&
+             (data.sender_id == request.auth.uid || data.recipient_id == request.auth.uid) &&
+             isValidString('type', 1, 50) &&
+             isValidString('message', 1, 1000) &&
+             isValidBoolean('read') &&
+             isValidDate('created_at') &&
+             isValidOptionalString('sender_name', 0, 100) &&
+             isValidOptionalString('related_id', 0, 100);
+    }
+
+    function isValidBankAccount(data) {
+      return hasRequiredFields(['accountName', 'cpf', 'updatedAt']) &&
+             isValidOptionalString('pixKey', 0, 200) &&
+             isValidOptionalString('bankName', 0, 100) &&
+             isValidOptionalString('agencyAccount', 0, 50) &&
+             isValidString('accountName', 1, 200) &&
+             isValidString('cpf', 1, 20) &&
+             isValidDate('updatedAt');
+    }
+
+    function isValidUserSettings(data) {
+      return isValidOptionalBoolean('soundEnabled') &&
+             isValidOptionalBoolean('browserNotificationsEnabled');
     }
 
     // ===============================================================
@@ -69,28 +368,123 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == 'user';
-      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
+      allow read: if true;
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && 
+                    request.resource.data.uid == resource.data.uid &&
+                    (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt) &&
+                    (!('balance' in resource.data) || request.resource.data.balance == resource.data.balance);
+      // Allow others to update followersCount securely
+      allow update: if isAuthenticated() && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']) &&
+                    math.abs(request.resource.data.get('followersCount', 0) - (resource.data.get('followersCount', 0))) <= 1;
+      allow delete: if isOwner(userId);
     }
 
     match /services/{serviceId} {
       allow read: if true;
-      allow create: if isAuthenticated() && isValidService(request.resource.data);
-      allow update: if isAuthenticated() && (resource.data.ownerUid == request.auth.uid || isAdmin()) && isValidService(request.resource.data);
-      allow delete: if isAuthenticated() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && hasRequiredFields(['sellerId', 'title', 'price', 'createdAt']) && isValidService(request.resource.data);
+      allow update: if isAuthenticated() && isValidService(request.resource.data) && 
+                    request.resource.data.sellerId == resource.data.sellerId &&
+                    (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+      allow delete: if isAuthenticated() && resource.data.sellerId == request.auth.uid;
     }
 
     match /posts/{postId} {
       allow read: if true;
-      allow create: if isAuthenticated() && isValidPost(request.resource.data);
-      allow update: if isAuthenticated() && (resource.data.ownerUid == request.auth.uid || isAdmin()) && isValidPost(request.resource.data);
-      allow delete: if isAuthenticated() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && hasRequiredFields(['authorId', 'createdAt']) && isValidPost(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.authorId == request.auth.uid &&
+                    isValidPost(request.resource.data) && 
+                    request.resource.data.authorId == resource.data.authorId &&
+                    (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+      // Allow others to update likesCount/commentsCount securely
+      allow update: if isAuthenticated() && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount', 'commentsCount']) &&
+                    (math.abs(request.resource.data.get('likesCount', 0) - (resource.data.get('likesCount', 0))) <= 1) &&
+                    (math.abs(request.resource.data.get('commentsCount', 0) - (resource.data.get('commentsCount', 0))) <= 1);
+      allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
     }
 
-    match /chats/{chatId}/messages/{messageId} {
-      allow read: if isAuthenticated() && (chatId.matches(".*" + request.auth.uid + ".*"));
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (
+        request.auth.token.email == resource.data.buyer_email || 
+        request.auth.uid == resource.data.seller_id || 
+        (resource.data.get('buyerId', '') == request.auth.uid)
+      );
+      allow create: if isAuthenticated() && isValidOrder(request.resource.data);
+      allow update: if isAuthenticated() && 
+                    (request.auth.token.email == resource.data.buyer_email || request.auth.uid == resource.data.seller_id || (resource.data.get('buyerId', '') == request.auth.uid)) &&
+                    isValidOrder(request.resource.data);
+    }
+
+    match /purchases/{purchaseId} {
+      allow read: if isAuthenticated() && (
+        request.auth.token.email == resource.data.user_email || 
+        (resource.data.get('buyerId', '') == request.auth.uid)
+      );
+      allow create: if isAuthenticated() && isValidPurchase(request.resource.data);
+    }
+
+    match /withdrawal_requests/{requestId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.status == 'pending';
+    }
+
+    match /follows/{followId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidFollow(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.followerId == request.auth.uid;
+    }
+
+    match /chats/{chatId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow create: if isAuthenticated() && isValidChat(request.resource.data);
+      allow update: if isAuthenticated() && isValidChat(request.resource.data) && 
+                    request.auth.uid in resource.data.participants;
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated(); // Should ideally check if user is in chat, but requires complex query or denormalization
       allow create: if isAuthenticated() && isValidMessage(request.resource.data);
+    }
+
+    match /likes/{likeId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidLike(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidComment(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
+    }
+
+    match /bookmarks/{bookmarkId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isOwner(resource.data.userId));
+      allow create: if isAuthenticated() && isValidBookmark(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.recipient_id == request.auth.uid;
+      allow create: if isAuthenticated() && isValidNotification(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.recipient_id == request.auth.uid && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAuthenticated() && resource.data.recipient_id == request.auth.uid;
+    }
+
+    match /bank_accounts/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidBankAccount(request.resource.data);
+      allow update: if isOwner(userId) && isValidBankAccount(request.resource.data);
+    }
+
+    match /user_settings/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserSettings(request.resource.data);
+      allow update: if isOwner(userId) && isValidUserSettings(request.resource.data);
     }
   }
 }
