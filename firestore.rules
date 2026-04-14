@@ -166,6 +166,14 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'dweminem@gmail.com' ||
+        request.auth.token.email == 'contato.packzinhu@gmail.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
     function isDocOwner() {
       return isAuthenticated() && request.auth.uid == resource.data.uid;
     }
@@ -269,17 +277,33 @@ service cloud.firestore {
              isValidOptionalNumber('commentsCount');
     }
 
-    function isValidOrder(data) {
-      return hasRequiredFields(['product_id', 'buyer_email', 'seller_id', 'price', 'status', 'created_at']) &&
-             isValidString('product_id', 1, 100) &&
-             isValidString('buyer_email', 1, 200) &&
-             isValidString('seller_id', 1, 100) &&
-             isValidNumber('price') && data.price >= 0 &&
-             isValidOptionalNumber('seller_amount') &&
-             isValidOptionalNumber('platform_fee') &&
-             data.status in ['pending', 'paid', 'accepted', 'delivered', 'refused', 'cancelled'] &&
-             isValidDate('created_at') &&
-             isValidOptionalString('mpPaymentId', 0, 200);
+      function isValidOrder(data) {
+        return hasRequiredFields(['product_id', 'buyer_email', 'seller_id', 'price', 'status', 'created_at']) &&
+               isValidString('product_id', 1, 100) &&
+               isValidString('buyer_email', 1, 200) &&
+               isValidString('seller_id', 1, 100) &&
+               isValidNumber('price') && data.price >= 0 &&
+               isValidOptionalNumber('seller_amount') &&
+               isValidOptionalNumber('platform_fee') &&
+               data.status in ['pending', 'paid', 'accepted', 'delivered', 'refused', 'cancelled', 'disputed', 'completed_by_seller', 'refunded'] &&
+               isValidDate('created_at') &&
+               isValidOptionalString('mpPaymentId', 0, 200) &&
+               isValidOptionalBoolean('rated') &&
+               isValidOptionalDate('resolvedAt') &&
+               isValidOptionalString('resolution', 0, 50);
+      }
+
+    function isValidReview(data) {
+      return hasRequiredFields(['orderId', 'serviceId', 'sellerId', 'buyerId', 'rating', 'createdAt']) &&
+             isValidString('orderId', 1, 100) &&
+             isValidString('serviceId', 1, 100) &&
+             isValidString('sellerId', 1, 100) &&
+             isValidString('buyerId', 1, 100) &&
+             isValidNumber('rating') && data.rating >= 1 && data.rating <= 5 &&
+             isValidDate('createdAt') &&
+             isValidOptionalString('comment', 0, 5000) &&
+             isValidOptionalString('buyerName', 0, 100) &&
+             isValidOptionalString('buyerPhoto', 0, 1000);
     }
 
     function isValidPurchase(data) {
@@ -370,10 +394,12 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if true;
       allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && 
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && 
                     request.resource.data.uid == resource.data.uid &&
                     (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt) &&
-                    (!('balance' in resource.data) || request.resource.data.balance == resource.data.balance);
+                    (!('balance' in resource.data) || request.resource.data.balance == resource.data.balance)) ||
+                    (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasAny(['isVerified', 'role'])) ||
+                    (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalRating', 'reviewCount', 'rating']));
       // Allow others to update followersCount securely
       allow update: if isAuthenticated() && 
                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']) &&
@@ -384,9 +410,10 @@ service cloud.firestore {
     match /services/{serviceId} {
       allow read: if true;
       allow create: if isAuthenticated() && hasRequiredFields(['sellerId', 'title', 'price', 'createdAt']) && isValidService(request.resource.data);
-      allow update: if isAuthenticated() && isValidService(request.resource.data) && 
+      allow update: if (isAuthenticated() && isValidService(request.resource.data) && 
                     request.resource.data.sellerId == resource.data.sellerId &&
-                    (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+                    (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt)) ||
+                    (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalRating', 'reviewCount', 'rating']));
       allow delete: if isAuthenticated() && resource.data.sellerId == request.auth.uid;
     }
 
@@ -405,20 +432,27 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
     }
 
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
     match /orders/{orderId} {
       allow read: if isAuthenticated() && (
+        isAdmin() ||
         request.auth.token.email == resource.data.buyer_email || 
         request.auth.uid == resource.data.seller_id || 
         (resource.data.get('buyerId', '') == request.auth.uid)
       );
       allow create: if isAuthenticated() && isValidOrder(request.resource.data);
       allow update: if isAuthenticated() && 
-                    (request.auth.token.email == resource.data.buyer_email || request.auth.uid == resource.data.seller_id || (resource.data.get('buyerId', '') == request.auth.uid)) &&
-                    isValidOrder(request.resource.data);
+                    (isAdmin() || request.auth.token.email == resource.data.buyer_email || request.auth.uid == resource.data.seller_id || (resource.data.get('buyerId', '') == request.auth.uid));
     }
 
     match /purchases/{purchaseId} {
       allow read: if isAuthenticated() && (
+        isAdmin() ||
         request.auth.token.email == resource.data.user_email || 
         (resource.data.get('buyerId', '') == request.auth.uid)
       );
@@ -426,9 +460,10 @@ service cloud.firestore {
     }
 
     match /withdrawal_requests/{requestId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid &&
                     request.resource.data.status == 'pending';
+      allow update: if isAdmin();
     }
 
     match /follows/{followId} {
@@ -476,7 +511,7 @@ service cloud.firestore {
     }
 
     match /bank_accounts/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && isValidBankAccount(request.resource.data);
       allow update: if isOwner(userId) && isValidBankAccount(request.resource.data);
     }
